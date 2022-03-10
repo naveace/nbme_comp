@@ -1,6 +1,9 @@
 # Data Files
 **/data/*.csv
 **/data/*.zip
+*.pkl
+*.npz
+*.zip
 # Temporary and binary files
 *~
 *.py[cod]
