@@ -6,6 +6,7 @@ from typing import Set
 class CorpusEmbedder:
     """
     Embeds a patient note from patient_notes.csv using a Hugging Face embedding model
+    MODEL_NAMES is a class variable that contains the valid model names which can be passed to the constructor
     """
     MODEL_NAMES = set()
 
