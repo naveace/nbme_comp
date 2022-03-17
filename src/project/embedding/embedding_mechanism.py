@@ -36,7 +36,7 @@ class CorpusEmbedder:
 
         # Check if the embedding for this patient row is in the cache
         embedding_name = f"{patient_row['patient_id']}.npy"
-        if embedding_name not in os.listdir('.'):
+        if embedding_name not in os.listdir('.') and cache:
             embedder = SentenceTransformer(self.model_name)
             embedding = embedder.encode(patient_row['pn_history'])
             np.save(f"{embedding_output_path}/{embedding_name}", embedding)
