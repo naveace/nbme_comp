@@ -3,6 +3,7 @@
 **/data/*.zip
 *.pkl
 *.npz
+*.npy
 *.zip
 # Temporary and binary files
 *~
