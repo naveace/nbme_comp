@@ -6,7 +6,10 @@ from sentence_transformers import SentenceTransformer
 
 class CorpusEmbedder:
     """
-    Embeds a patient note from patient_notes.csv using a Hugging Face embedding model
+    Allows for embedding any patient note from the patient_notes.csv file using either:
+    - a https://www.sbert.net/ embedder, using the pretrained models from the table here: https://www.sbert.net/docs/pretrained_models.html
+    - a hugging face embeddering, using the name given here https://huggingface.co/models?pipeline_tag=feature-extraction&sort=downloads
+    - - e.g. 'openai/clip-vit-base-patch32'
     MODEL_NAMES is a class variable that contains the valid model names which can be passed to the constructor
     """
     MODEL_NAMES = set({"all-mpnet-base-v2"})
@@ -14,7 +17,7 @@ class CorpusEmbedder:
 
     def __init__(self, model_name: str) -> None:
         """
-        :param: model_name - the name of the Hugging Face model to use
+        :param: model_name - the name of the model to use
         Should be one of the valid model names given by the MODEL_NAMES variable
         """
         self.model_name = model_name
