@@ -2,7 +2,10 @@ import os
 import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
-
+from pathlib import Path
+_FILE_PATH = os.path.abspath(__file__)
+_DIR_PATH = os.path.dirname(_FILE_PATH)
+_PROJECT_PATH = Path(_DIR_PATH).parent.absolute()
 
 class CorpusEmbedder:
     """
@@ -13,7 +16,7 @@ class CorpusEmbedder:
     MODEL_NAMES is a class variable that contains the valid model names which can be passed to the constructor
     """
     MODEL_NAMES = set({"all-mpnet-base-v2"})
-    OUTPUT_DIR = "./outputs"
+    OUTPUT_DIR = f"{_PROJECT_PATH}/data/embeddings"
 
     def __init__(self, model_name: str) -> None:
         """
@@ -35,11 +38,11 @@ class CorpusEmbedder:
         embedding_output_path = f"{self.OUTPUT_DIR}/{self.model_name}" 
         # First create the cache directory if it doesn't exist
         if not os.path.exists(embedding_output_path):
-            os.mkdir(embedding_output_path)
+            os.makedirs(embedding_output_path)
 
         # Check if the embedding for this patient row is in the cache
         embedding_name = f"{patient_row['patient_id']}.npy"
-        if embedding_name not in os.listdir('.') and cache:
+        if embedding_name not in os.listdir(embedding_output_path) and cache:
             embedder = SentenceTransformer(self.model_name)
             embedding = embedder.encode(patient_row['pn_history'])
             np.save(f"{embedding_output_path}/{embedding_name}", embedding)
