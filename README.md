@@ -36,3 +36,11 @@ In [3]:
 ```
 
 The thing I just imported from (hello world) is located in `src/project`. Head there next :) 
+
+# Building
+
+To build this project, run
+```
+python -m build
+```
+and find the most recent `.whl` file under `dist/`.
