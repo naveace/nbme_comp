@@ -1,5 +1,6 @@
 from project.hello_world import hello_world
 import sys
+from typing import List
 import numpy as np
 import pandas as pd
 from os.path import join
@@ -25,10 +26,12 @@ def load_test_data() -> pd.DataFrame:
     test = test.merge(features, on='feature_num').merge(patient_notes, on='pn_num')
     return test
 
-if __name__ == '__main__':
-    # Loading data
-    test = load_test_data()
-    # Making predictions
+def make_predictions(test: pd.DataFrame) -> List[str]:
+    """
+    Makes predictions using Male/Female classifiers for each item in test set
+    Expects test set to be given by load_test_data()
+    Inserts random predictions if no classifiers available
+    """
     predictions = []
     male_classifier, female_classifier = MaleEvalClassifier(), FemaleEvalClassifier()
     for idx, r in tqdm(test.iterrows(), desc='Eval:', total=len(test)):
@@ -42,6 +45,13 @@ if __name__ == '__main__':
             predictions.append(bounds)
         else:
             predictions.append(f'{np.random.randint(100)} {np.random.randint(101, 200)}')
+    return predictions
+
+if __name__ == '__main__':
+    # Loading data
+    test = load_test_data()
+    # Making predictions
+    predictions = make_predictions(test)
     test['location'] = predictions
     submission = test[['id', 'location']]
     submission.to_csv('submission.csv', index=False)
