@@ -1,6 +1,7 @@
 # Data Files
 **/data/*.csv
 **/data/*.zip
+**/experiments/**/tokenizer/*
 *.pkl
 *.npz
 *.npy
