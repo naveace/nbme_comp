@@ -41,7 +41,7 @@ class CorpusEmbedder:
             os.makedirs(embedding_output_path)
 
         # Check if the embedding for this patient row is in the cache
-        embedding_name = f"{patient_row['patient_id']}.npy"
+        embedding_name = f"{patient_row['pn_num']}.npy"
         if embedding_name not in os.listdir(embedding_output_path) and cache:
             embedder = SentenceTransformer(self.model_name)
             embedding = embedder.encode(patient_row['pn_history'])
@@ -52,5 +52,5 @@ class CorpusEmbedder:
 
 if __name__ == "__main__":
     embedder = CorpusEmbedder("all-mpnet-base-v2")
-    embedding = embedder.embed(pd.Series({'patient_id': '1', 'pn_history': 'I am a patient with a history of diabetes'}))
+    embedding = embedder.embed(pd.Series({'pn_num': '1', 'pn_history': 'I am a patient with a history of diabetes'}))
     print(embedding.shape)
