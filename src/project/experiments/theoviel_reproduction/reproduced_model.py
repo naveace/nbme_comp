@@ -1,6 +1,7 @@
 from transformers import BatchEncoding, AutoTokenizer
 import torch
 
+
 # Copied verbatim from notebook. TODO: refactor out
 class CFG:
     wandb=False
@@ -44,9 +45,15 @@ def encode_input(pn_history: str, feature_text: str) -> BatchEncoding:
         where 1 indicates that feature `feature_text` is present in the token.
     :param pn_history: The patient note
     :param feature_text: The feature text
-    :return: The Batch Encoding of the pair of inputs
+    :return: The Batch Encoding of the pair of inputs with the following fi
     """
-    return prepare_input(CFG, pn_history, feature_text)
+    tokenizer = AutoTokenizer.from_pretrained("microsoft/deberta-base")
+    inputs = tokenizer(pn_history, feature_text, add_special_tokens=True,
+     max_length=512, padding='max_length', return_offsets_mapping=False)
+    for key, value in inputs.items():
+        inputs[key] = torch.tensor(value, dtype=torch.long)
+    return inputs
+    
 
 
 def prepare_input(cfg, text, feature_text):
