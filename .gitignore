@@ -6,6 +6,8 @@
 *.npz
 *.npy
 *.zip
+**/tokenizer/*.txt
+**/tokenizer/*.json
 # Temporary and binary files
 *~
 *.py[cod]
