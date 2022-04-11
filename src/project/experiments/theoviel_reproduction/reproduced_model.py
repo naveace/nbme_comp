@@ -1,5 +1,8 @@
 import pandas as pd
-from transformers import BatchEncoding, AutoTokenizer
+from transformers import BatchEncoding, AutoTokenizer, AutoModel, AutoConfig
+from transformers.models.deberta.configuration_deberta import DebertaConfig
+from transformers.models.deberta.modeling_deberta import DebertaModel
+import torch.nn as nn
 import torch
 from typing import List, Tuple
 import numpy as np
@@ -85,10 +88,13 @@ def create_label(text: str, location_list: List[Tuple[int, int]]) -> torch.Tenso
             label[start_idx:end_idx] = 1 # Give a token label of 1 if the idxs it corresponds to are within (start, end)
     return torch.tensor(label, dtype=torch.float)
 
-
 class TrainDataset(Dataset):
     """
     Represents and immutable training dataset.
+    Wraps around a dataframe expected to have columns
+        - pn_history: The patient note
+        - feature_text: The feature text
+        - location: The location pairs of the feature text in the patient note
     """
     def __init__(self, df: pd.DataFrame):
         self._TRAIN = df.copy(deep=True)
@@ -104,8 +110,53 @@ class TrainDataset(Dataset):
 
 """
 Next steps: 
-- Add in model class, ensure it is compatible with Train Dataset. Note that it takes a *significant* amount of RAM just to run the model once. 
 - Addi in train loop and get this thing training!
-
-
 """
+
+# ====================================================
+# Model
+# ====================================================
+class DebertaCustomModel(nn.Module):
+    """
+    Represents a custom pre-trained DeBerta Model which can featurize BetchEncodings or produce outputs
+    Outputs are scalars indicating presence (1) or non-presence (0) of the feature text in the patient note or whether a token is a special token (-1)
+    """
+    def __init__(self):
+        super().__init__()
+        self._config:DebertaConfig = AutoConfig.from_pretrained(CFG.model, output_hidden_states=True)
+        self._model:DebertaModel = AutoModel.from_pretrained(CFG.model, config=self._config)
+        self._fc_dropout = nn.Dropout(CFG.fc_dropout)
+        self._fc = nn.Linear(self._config.hidden_size, 1)
+        self._init_weights(self._fc)
+        
+    def _init_weights(self, module: nn.Module) -> None:
+        """
+        Initializes the weights of a module
+        :param module: The module to initialize weights for
+        TODO: See if this is necessary
+        """
+        if isinstance(module, nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=self._config.initializer_range)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        else:
+            raise Exception('Non-Linear modules not supported yet, see kaggle book for details')
+        
+    def feature(self, inputs: BatchEncoding) -> torch.Tensor:
+        """
+        Creates a feature embedding of the input
+        :param inputs: The input to featurize
+        :return: The feature embedding
+        """
+        outputs = self._model(**inputs)
+        last_hidden_states = outputs[0]
+        return last_hidden_states
+
+    def forward(self, inputs: BatchEncoding) -> torch.Tensor:
+        """
+        Produces output for the input. 
+        If encoding is of size (batch x nTokens), output is of size (batch x nTokens x 1)
+        """
+        feature = self.feature(inputs)
+        output = self._fc(self._fc_dropout(feature))
+        return output

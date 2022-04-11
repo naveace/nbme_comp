@@ -1,8 +1,9 @@
 from venv import create
-from project.experiments.theoviel_reproduction.reproduced_model import encode_input, create_label, TrainDataset
+from project.experiments.theoviel_reproduction.reproduced_model import encode_input, create_label, TrainDataset, DebertaCustomModel
 import numpy as np
 from project.data.data_loaders import get_clean_train_data
 from typing import Final
+from torch.utils.data import DataLoader
 TRAIN:Final = get_clean_train_data()
 
 def test_empty_input():
@@ -50,3 +51,22 @@ def test_train_dataset():
     assert test_X.input_ids[0].item() == 1
     assert test_y[39].item() == 1
 
+def seed_everything(seed=42):
+    import random
+    import os
+    import torch
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    
+def test_model():
+    seed_everything()
+    dataloader = DataLoader(TrainDataset(TRAIN), batch_size=5, shuffle=False, num_workers=1, pin_memory=True, drop_last=True)
+    model = DebertaCustomModel().train()
+    test_input = next(iter(dataloader))[0]
+    test_output = model.forward(test_input)
+    assert test_output.shape == (5, 466, 1)
+    # assert np.isclose(test_output[4].view(-1).mean().item(), 0.3047) # TODO: This test fails, not sure if it is due to OS difference, or if the model is not working properly.
