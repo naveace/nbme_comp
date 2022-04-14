@@ -1,6 +1,7 @@
 import pandas as pd
 from transformers import BatchEncoding, AutoTokenizer, AutoModel, AutoConfig
 from transformers.models.deberta.configuration_deberta import DebertaConfig
+from transformers.models.deberta.tokenization_deberta_fast import DebertaTokenizerFast
 from transformers.models.deberta.modeling_deberta import DebertaModel
 import torch.nn as nn
 import torch
@@ -38,7 +39,7 @@ class CFG:
     n_fold=5
     trn_fold=[0, 1, 2, 3, 4]
     train=True
-tokenizer = AutoTokenizer.from_pretrained(CFG.model)
+tokenizer:DebertaTokenizerFast = AutoTokenizer.from_pretrained(CFG.model)
 tokenizer.save_pretrained('tokenizer/')
 
 def encode_input(pn_history: str, feature_text: str) -> BatchEncoding:
