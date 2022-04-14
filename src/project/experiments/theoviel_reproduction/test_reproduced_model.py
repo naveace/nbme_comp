@@ -69,3 +69,4 @@ def test_model():
     for k, v in this_model_param_means.items():
         kaggle_key = '.'.join(['model' if not k.startswith('_fc') else 'fc'] + k.split('.')[1:])  # whatever we call our model internally should not matter, called model on kaggle
         assert np.isclose(v, kaggle_param_means[kaggle_key]), f'{kaggle_key} differs. Ours: {v:.5f}, theirs: {kaggle_param_means[kaggle_key]:.5f}'
+    assert model.deberta_model()

@@ -160,3 +160,9 @@ class DebertaCustomModel(nn.Module):
         feature = self.feature(inputs)
         output = self._fc(self._fc_dropout(feature))
         return output
+    
+    def deberta_model(self) -> DebertaModel:
+        """
+        Returns the underlying DebertaModel, meant to be for reference only
+        """
+        return self._model
