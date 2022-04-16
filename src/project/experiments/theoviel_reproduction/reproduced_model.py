@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch
 from typing import List, Tuple
 import numpy as np
+from transformers import get_cosine_schedule_with_warmup
 from torch.utils.data import Dataset
 from project.data.data_loaders import get_clean_train_data
 # Copied verbatim from notebook. TODO: refactor out
@@ -162,8 +163,41 @@ class DebertaCustomModel(nn.Module):
         output = self._fc(self._fc_dropout(feature))
         return output
     
-    def deberta_model(self) -> DebertaModel:
+    def encoder_model(self) -> DebertaModel:
         """
         Returns the underlying DebertaModel, meant to be for reference only
         """
         return self._model
+    
+    def decoder_parameters(self) -> List[nn.Parameter]:
+        """
+        Returns the parameters of the decoder
+        """
+        return self._fc.parameters()
+
+
+def get_optimizer(model: DebertaCustomModel) -> torch.optim.Optimizer:
+    """
+    Returns an optimizer for the model
+    Applies 0 weight decay to bias and LayerNorm terms as well as the fully connected layer
+    :param model: The model to optimize
+    :return: The optimizer
+    """
+    is_decay_param = lambda name: not any(no_decay_indicator in name for no_decay_indicator in ["bias", "LayerNorm.bias", "LayerNorm.weight"])
+    optimizer_parameters = [
+        {'params': [param for name, param in model.encoder_model().named_parameters() if is_decay_param(name)],
+            'lr': CFG.encoder_lr, 'weight_decay': CFG.weight_decay},
+        {'params': [param for name, param in model.encoder_model().named_parameters() if not is_decay_param(name)],
+            'lr': CFG.encoder_lr, 'weight_decay': 0.0},
+        {'params': model.decoder_parameters(), 'lr': CFG.decoder_lr, 'weight_decay': 0.0}
+    ]
+    return torch.optim.AdamW(optimizer_parameters, lr=CFG.encoder_lr, eps=CFG.eps, betas=CFG.betas)
+
+def get_scheduler(optimizer: torch.optim.Optimizer, num_train_steps: int) -> object:
+    """
+    Given an optimizer returns a cosine lr scheduler wrapped around the optimizer
+    """
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer, num_warmup_steps=CFG.num_warmup_steps, num_training_steps=num_train_steps, num_cycles=CFG.num_cycles
+    )
+    return scheduler
