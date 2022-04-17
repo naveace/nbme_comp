@@ -8,6 +8,31 @@ from project.classifiers import MaleEvalClassifier, FemaleEvalClassifier
 from tqdm import tqdm
 hello_world()
 
+class BaselineClassifier:
+    def __init__(self) -> None:
+        pass
+
+class Classifiers:
+    """
+    Class to hold and serve all available classifiers for evaluation. If the requested classifier does not exist,
+    it will be return the 'general' classifier, which reflects this project's baseline state of the art 
+    (i.e. Theo Viel's naive 58% accurate baseline).
+
+    """
+    def __init__(self):
+        CLASSIFIERS = {
+            'male': MaleEvalClassifier(),
+            'female': FemaleEvalClassifier(),
+            'general': BaselineClassifier()
+        }
+        self.classifiers = CLASSIFIERS
+
+    def __getitem__(self, index):
+        if index not in self.classifiers:
+            return self.classifiers['general']
+        return self.classifiers[index]
+
+        
 def load_test_data() -> pd.DataFrame:
     """
     Returns a pandas DataFrame with all data relevant for evaluation. Each row has at minimum:
@@ -33,7 +58,8 @@ def make_predictions(test: pd.DataFrame) -> List[str]:
     Inserts random predictions if no classifiers available
     """
     predictions = []
-    male_classifier, female_classifier = MaleEvalClassifier(), FemaleEvalClassifier()
+    classifiers = Classifiers()
+    male_classifier, female_classifier = classifiers['male'], classifiers['female']
     for idx, r in tqdm(test.iterrows(), desc='Eval:', total=len(test)):
         if r['feature_text'] == 'Male':
             prediction = male_classifier.predict(r["pn_history"])
