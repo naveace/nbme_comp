@@ -1,3 +1,4 @@
+from tqdm import tqdm
 import pandas as pd
 from transformers import BatchEncoding, AutoTokenizer, AutoModel, AutoConfig
 from transformers.models.deberta.configuration_deberta import DebertaConfig
@@ -8,7 +9,7 @@ import torch
 from typing import List, Tuple
 import numpy as np
 from transformers import get_cosine_schedule_with_warmup
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from project.data.data_loaders import get_clean_train_data
 # Copied verbatim from notebook. TODO: refactor out
 class CFG:
@@ -201,3 +202,61 @@ def get_scheduler(optimizer: torch.optim.Optimizer, num_train_steps: int) -> obj
         optimizer, num_warmup_steps=CFG.num_warmup_steps, num_training_steps=num_train_steps, num_cycles=CFG.num_cycles
     )
     return scheduler
+
+def train_loop(model: DebertaCustomModel, train_loader: DataLoader, optimizer: torch.optim.Optimizer, scheduler: object, device: torch.device) -> DebertaCustomModel:
+    """
+    Trains the model for one epoch
+    :param model: The model to train
+    :param train_loader: The training data loader
+    :param optimizer: The optimizer to use
+    :param scheduler: The scheduler to use
+    :param device: The device to use
+    """
+    model.train().to(device)
+    criterion = nn.BCEWithLogitsLoss(reduction="none")
+    scalar = torch.cuda.amp.grad_scaler.GradScaler(enabled=True)
+    losses = []
+    for step, (inputs, labels) in tqdm(enumerate(train_loader), total=len(train_loader)):
+        assert isinstance(inputs, dict) and isinstance(labels, torch.Tensor)
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        labels = labels.to(device)
+        with torch.cuda.amp.autocast():
+            y_preds = model.forward(inputs)
+        loss:torch.Tensor = criterion(y_preds.view(-1, 1), labels.view(-1, 1))
+        loss = torch.masked_select(loss, labels.view(-1, 1) != -1).mean()
+        scalar.scale(loss).backward()
+        scalar.step(optimizer)
+        scalar.update()
+        optimizer.zero_grad()
+        scheduler.step()
+        losses.append(loss.detach().cpu().item())
+        if step % 100 == 0:
+            print(f'Train loss: {np.mean(losses):.4f} ({np.std(losses):.4f})')
+            losses.clear()
+    return model
+
+def val_loop(model: DebertaCustomModel, val_loader: DataLoader, device: torch.device) -> Tuple[float, np.ndarray]:
+    """
+    Evaluates the model on the validation dataset and returns the validation loss and prediction on whole val set
+        prexictions is (n_datapoints x n_tokens)
+    :param model: The model to evaluate
+    :param val_loader: The validation data loader
+    :param device: The device to use
+    :return: The validation loss and the predictions
+    """
+    model.eval()
+    criterion = nn.BCEWithLogitsLoss(reduction="none")
+    losses = []
+    predictions = []
+    with torch.no_grad():
+        for step, (inputs, labels) in tqdm(enumerate(val_loader), total=len(val_loader)):
+            assert isinstance(inputs, dict) and isinstance(labels, torch.Tensor)
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+            labels = labels.to(device)
+            y_preds = model.forward(inputs)
+            loss:torch.Tensor = criterion(y_preds.view(-1, 1), labels.view(-1, 1))
+            loss = torch.masked_select(loss, labels.view(-1, 1) != -1).mean()
+            losses.append(loss.detach().cpu().item())
+            batch_size = labels.size(0)
+            predictions.append(y_preds.sigmoid().cpu().numpy().reshape(batch_size, -1))
+    return np.mean(losses), np.concatenate(predictions, axis=0)
