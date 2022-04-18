@@ -8,6 +8,7 @@
 *.zip
 **/tokenizer/*.txt
 **/tokenizer/*.json
+**/tutorial-env/**
 # Temporary and binary files
 *~
 *.py[cod]

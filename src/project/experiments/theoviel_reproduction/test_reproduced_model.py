@@ -1,4 +1,4 @@
-from project.experiments.theoviel_reproduction.reproduced_model import encode_input, create_label, TrainDataset, DebertaCustomModel
+from project.experiments.theoviel_reproduction.reproduced_model import _encode_input, _create_label, TrainDataset, DebertaCustomModel
 import numpy as np
 from project.data.data_loaders import get_clean_train_data
 from typing import Final
@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 TRAIN:Final = get_clean_train_data()
 
 def test_empty_input():
-    encoding = encode_input("", "")
+    encoding = _encode_input("", "")
     input_ids:np.ndarray = encoding.input_ids.numpy()
     token_type_ids:np.ndarray = encoding.token_type_ids.numpy()
     attention_mask:np.ndarray = encoding.attention_mask.numpy()
@@ -19,7 +19,7 @@ def test_empty_input():
 def test_patient_note_and_feature():
     HISTORY = TRAIN.pn_history.values[0]
     FEATURE = TRAIN.feature_text.values[0]
-    encoding = encode_input(HISTORY, FEATURE)
+    encoding = _encode_input(HISTORY, FEATURE)
     input_ids:np.ndarray = encoding.input_ids.numpy()
     token_type_ids:np.ndarray = encoding.token_type_ids.numpy()
     attention_mask:np.ndarray = encoding.attention_mask.numpy()
@@ -31,14 +31,14 @@ def test_patient_note_and_feature():
     assert len(np.nonzero(attention_mask)[0]) == 270
 
 def test_create_label_single_loc():
-    label:np.ndarray = create_label(TRAIN.loc[20, 'pn_history'], TRAIN.loc[20, 'location']).numpy()
+    label:np.ndarray = _create_label(TRAIN.loc[20, 'pn_history'], TRAIN.loc[20, 'location']).numpy()
     assert label.shape == (466,)
     assert label[0] == -1
     assert np.all(np.where(label == 1)[0] == [101, 102])
 
 
 def test_create_label_multi_loc():
-    label:np.ndarray = create_label(TRAIN.loc[3, 'pn_history'], TRAIN.loc[3, 'location']).numpy()
+    label:np.ndarray = _create_label(TRAIN.loc[3, 'pn_history'], TRAIN.loc[3, 'location']).numpy()
     assert label.shape == (466,)
     assert label[0] == -1
     assert np.all(np.where(label == 1)[0] == [20, 21, 43])

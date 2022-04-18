@@ -11,6 +11,8 @@ import numpy as np
 from transformers import get_cosine_schedule_with_warmup
 from torch.utils.data import Dataset, DataLoader
 from project.data.data_loaders import get_clean_train_data
+from sklearn.metrics import f1_score
+
 # Copied verbatim from notebook. TODO: refactor out
 class CFG:
     wandb=False
@@ -44,7 +46,7 @@ class CFG:
 tokenizer:DebertaTokenizerFast = AutoTokenizer.from_pretrained(CFG.model)
 tokenizer.save_pretrained('tokenizer/')
 
-def encode_input(pn_history: str, feature_text: str) -> BatchEncoding:
+def _encode_input(pn_history: str, feature_text: str) -> BatchEncoding:
     """
     Encodes the input text of a patient note as well as the feature text into a Batch Encoding
         which will be fed into the DeBerta model.
@@ -62,7 +64,7 @@ def encode_input(pn_history: str, feature_text: str) -> BatchEncoding:
         inputs[key] = torch.tensor(value, dtype=torch.long)
     return inputs
 
-def create_label(text: str, location_list: List[Tuple[int, int]]) -> torch.Tensor:
+def _create_label(text: str, location_list: List[Tuple[int, int]]) -> torch.Tensor:
     """
     Creates a label for the tokens correpsonding to input_text given a list of start and end locations (in the input text) of characters that should be given label 1
     Label gives -1 to special tokens, 0 to tokens with no characters they correspond to in location_list, and 1 to all other tokens
@@ -107,18 +109,10 @@ class TrainDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Tuple[BatchEncoding, torch.Tensor]:
         row:pd.Series = self._TRAIN.iloc[idx]
-        inputs = encode_input(row['pn_history'], row['feature_text'])
-        label = create_label(row['pn_history'], row['location'])
+        inputs = _encode_input(row['pn_history'], row['feature_text'])
+        label = _create_label(row['pn_history'], row['location'])
         return inputs, label
 
-"""
-Next steps: 
-- Addi in train loop and get this thing training!
-"""
-
-# ====================================================
-# Model
-# ====================================================
 class DebertaCustomModel(nn.Module):
     """
     Represents a custom pre-trained DeBerta Model which can featurize BetchEncodings or produce outputs
@@ -175,6 +169,23 @@ class DebertaCustomModel(nn.Module):
         Returns the parameters of the decoder
         """
         return self._fc.parameters()
+    
+    def inference(self, text: str, feature: str) -> List[Tuple[int, int]]:
+        """
+        Performs inference on a patient note `text` and a feature `feature`
+        :param text: The patient note
+        :param feature: The feature text
+        :return: The location pairs of the feature text in the patient note
+        """
+        assert torch.cuda.is_available(), 'Deberta model requires GPU'
+        device = torch.device('cuda')
+        self.to(device)
+        self.eval()
+        inputs = {k: v.to(device).view(1,-1) for k, v in _encode_input(text, feature).items()}
+        with torch.no_grad():
+            output = self.forward(inputs).sigmoid().cpu().numpy().reshape(-1) # we have only one piece of text, so should be able to merge into one vector
+        _get_predicted_character_level_bounds(output, text)
+
 
 
 def get_optimizer(model: DebertaCustomModel) -> torch.optim.Optimizer:
@@ -260,3 +271,95 @@ def val_loop(model: DebertaCustomModel, val_loader: DataLoader, device: torch.de
             batch_size = labels.size(0)
             predictions.append(y_preds.sigmoid().cpu().numpy().reshape(batch_size, -1))
     return np.mean(losses), np.concatenate(predictions, axis=0)
+
+def get_f1_score(predictions: np.ndarray, patient_notes: List[str], true_bounds: List[Tuple[int, int]]) -> float:
+    """
+    Evaluates the F1 score of a set of `predictions` on a set of `patient notes` given the `true_bounds`
+    :param predictions: The predictions to evaluate, (n_datapoints x n_tokens)
+    :param patient_notes: The patient notes to evaluate on (n_datapoints)
+    :param true_bounds: The true bounds of the patient notes (n_datapoints)
+    :return: The F1 score
+    """
+    predicted_bounds = [_get_predicted_character_level_bounds(model_prediction, raw_text) for 
+                        model_prediction, raw_text in zip(predictions, patient_notes)]
+    return _evaluate_f1(predicted_bounds, true_bounds)
+
+def _get_pairs(lst: list) -> List[tuple]:
+    """
+    Returns inorder pairs from a list:
+    e.g. [1,2,3,4] -> [(1,2), (2,3), (3,4)]
+    Requires len(lst) >= 2
+    """
+    return list(zip(lst[:-1], lst[1:]))
+def _get_idx_groups(char_idxs: List[int]) -> List[List[int]]:
+    """
+    Returns the groups of consecutive indices in a list
+    e.g. [1,2,3,7,8,9] -> [[1,2,3], [7,8,9]]
+    """
+    if len(char_idxs) == 0:
+        return []
+    elif len(char_idxs) == 1:
+        return [char_idxs]
+    else:
+        distance_from_next = np.array(list(map(lambda t: t[1] - t[0], _get_pairs(char_idxs))))
+        split_list_idxs = [0] + list(np.where(distance_from_next > 1)[0] + 1) + [len(char_idxs)]
+        groups = []
+        for (start, end) in _get_pairs(split_list_idxs):
+            groups.append(char_idxs[start:end])
+        return groups
+def _get_predicted_character_level_bounds(model_output: np.ndarray, raw_text: str) -> List[Tuple[int, int]]:
+    """
+    Returns the character level bounds of the predicted text
+    :param model_output: The model output (n_datapoints x n_tokens)
+    :param raw_text: The raw text of the patient (n_datapoints)
+    :return: The character level bounds of the predicted text
+    """
+    char_level_text_prediction = np.zeros(len(raw_text))
+    encoded_text = tokenizer(raw_text, add_special_tokens=True, return_offsets_mapping=True)
+    for (start, end), pred in zip(encoded_text['offset_mapping'], model_output):
+        char_level_text_prediction[start:end] = pred
+    positive_char_idxs = np.where(char_level_text_prediction >= 0.5)[0]
+    idx_groups = _get_idx_groups(positive_char_idxs)
+    bounds = [(min(g), max(g)) for g in idx_groups]
+    return bounds
+
+def _spans_to_binary(spans: List[List[int]], length=None) -> np.ndarray:
+    """
+    Converts spans to a binary array indicating whether each character is in the span.
+
+    Args:
+        spans (list of lists of two ints): Spans.
+
+    Returns:
+        np array [length]: Binarized spans.
+    """
+    length:int = np.max(spans) if length is None else length
+    binary = np.zeros(length)
+    for start, end in spans:
+        binary[start:end] = 1
+    return binary
+def _get_binarized_values(predicted_span: List[Tuple[int, int]], true_span: List[Tuple[int, int]]) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Returns the binarized values of the predicted and true spans
+    :param predicted_span: The predicted span
+    :param true_span: The true span
+    :return: The binarized values of the predicted and true spans
+    e.g. predicted = [(0,1), (2,3)], true = [(2,4)]
+    Returns ([1,0,1,0,0], [0,0,1,1,1])
+    """
+    length = int(max(np.max(predicted_span, initial=0), np.max(true_span, initial=0)))
+    return _spans_to_binary(predicted_span, length), _spans_to_binary(true_span, length)
+
+def _evaluate_f1(predicted_bounds: List[Tuple[int, int]], true_locations:  List[Tuple[int, int]]) -> float:
+    """
+    Given a set of predicted bounds and true locations, returns the F1 score
+    :param predicted_bounds: The predicted bounds
+    :param true_locations: The true locations
+    :return: The F1 score
+    """
+    binary_preds, binary_truths = [], []
+    for predicted_bound, true_bound in zip(predicted_bounds, true_locations.values):
+        pred_binary, true_binary = _get_binarized_values(predicted_bound, true_bound)
+        binary_preds.append(pred_binary)
+        binary_truths.append(true_binary)
+    return f1_score(np.concatenate(binary_preds), np.concatenate(binary_truths))
