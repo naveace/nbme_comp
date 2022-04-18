@@ -184,7 +184,7 @@ class DebertaCustomModel(nn.Module):
         inputs = {k: v.to(device).view(1,-1) for k, v in _encode_input(text, feature).items()}
         with torch.no_grad():
             output = self.forward(inputs).sigmoid().cpu().numpy().reshape(-1) # we have only one piece of text, so should be able to merge into one vector
-        _get_predicted_character_level_bounds(output, text)
+        return _get_predicted_character_level_bounds(output, text)
 
 
 
