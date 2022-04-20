@@ -8,7 +8,7 @@ from typing import List, Union, Tuple
 from project.data.data_loaders import get_clean_train_data
 from sklearn.model_selection import GroupKFold
 
-
+import pdb
 
 def spans_to_binary(spans: List[List[int]], length=None) -> np.ndarray:
     """
@@ -46,7 +46,33 @@ class BaselineClassifier:
     """
         Implements Theo Viel's baseline string-matching classifier
     """
-    def location_to_span(location):
+
+    def __init__(self):
+        self.train_data, self.valid_data, self.patient_notes = self.get_prepared_data()
+
+    def get_prepared_data(self):
+        data = get_clean_train_data()
+        train_indices, test_indices = list(GroupKFold(n_splits=5).split(data['pn_history'], data['location'], data['pn_num']))[0]
+        train_data = data.iloc[train_indices]
+        valid_data = data.iloc[test_indices]
+                
+        train_data_grouped = train_data.groupby(['case_num', 'pn_num','pn_history'], as_index=False).agg(list)
+        patient_notes = train_data_grouped
+
+        patient_notes = patient_notes.dropna(axis=0).reset_index(drop=True)
+        patient_notes = patient_notes[['case_num', 'pn_num', 'pn_history', 'annotation', 'location', 'feature_text', 'feature_num']]
+        
+        # Cache matching dict with keys (case_num, feature_num) and values (list of annotations) of entire corpus
+        self.matching_dict = train_data.copy()[['case_num', 'feature_num', 'annotation']].groupby(['case_num', 'feature_num']).agg(list).T.to_dict()
+        self.matching_dict = {k: np.concatenate(v['annotation']) for k, v in self.matching_dict.items()}
+        self.matching_dict = {k: np.unique([v_.lower() for v_ in v]) for k, v in self.matching_dict.items()}
+
+        return train_data, valid_data, patient_notes
+
+    def location_to_span(location) -> List:
+        '''
+        Converts semicolon-delimited location string to list of spans.
+        '''
         spans = []
         for loc in location:
             if ";" in loc:
@@ -59,40 +85,33 @@ class BaselineClassifier:
         
         return spans
 
-    def preds_to_location(preds):
-        locations = []
-        for pred in preds:
-            loc = ";".join([" ".join(np.array(p).astype(str)) for p in pred])
-            locations.append(loc)
+    def pred_to_location(self, pred: List) -> str:
+        '''
+        Converts predicted spans to string of proper "location" format with semi-colon delimiters in the patient note.
+
+        ex: [[694, 704],[943,970]] -> "694 704;943 970"
+        '''
+        loc = ";".join([" ".join(np.array(p).astype(str)) for p in pred])
+
+        return loc
+
+
+    def predict(self, case_num: int, feature_num: int, patient_note: str) -> str: # TODO: modify entire submission script to match this
+        """
+        Returns string of bounds if case number case_num and note patient_note has feature_num, returns '' otherwise.
+        """
+        candidates = self.matching_dict[(case_num, feature_num)]
+
+        spans = []
+        for c in candidates:
+            start = patient_note.find(c)
+            if start > -1:
+                spans.append((start, start + len(c)))
+    
+        # list of predicted spans in their respective location of patient_note
+        locations = self.pred_to_location(spans)
         return locations
 
-
-    def fit(self, X: pd.DataFrame, y: Union[np.ndarray, list]):
-        pass
-
-    def predict(self, X: str, Y: str) -> int:
-        """
-        Returns 1 if `X` has a 'Y' feature present in it and the feature's bounds, 0 otherwise
-        """
-        
-        matching_dict = df_train[['case_num', 'feature_num', 'annotation']].groupby(['case_num', 'feature_num']).agg(list).T.to_dict()
-        matching_dict = {k: np.concatenate(v['annotation']) for k, v in matching_dict.items()}
-        matching_dict = {k: np.unique([v_.lower() for v_ in v]) for k, v in matching_dict.items()}
-
-        preds = []
-        for i in range(len(df_test)):
-            key = (df_test['case_num'][i], df_test['feature_num'][i])
-
-            candidates = matching_dict[key]
-
-            text = df_test['pn_history'][i].lower()
-
-            spans = []
-            for c in candidates:
-                start = text.find(c)
-                if start > -1:
-                    spans.append([start, start + len(c)])
-            preds.append(spans)
 
 
 if __name__ == "__main__":

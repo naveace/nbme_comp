@@ -5,12 +5,10 @@ import numpy as np
 import pandas as pd
 from os.path import join
 from project.classifiers import MaleEvalClassifier, FemaleEvalClassifier
+from project.experiments.theoviel_reproduction.luke_recreation.reproduced_model import * #TODO: remove and merge with above
 from tqdm import tqdm
 hello_world()
 
-class BaselineClassifier:
-    def __init__(self) -> None:
-        pass
 
 class Classifiers:
     """
@@ -57,9 +55,17 @@ def make_predictions(test: pd.DataFrame) -> List[str]:
     Expects test set to be given by load_test_data()
     Inserts random predictions if no classifiers available
     """
+
+    # Brainstorming for mega classifier mixture:
+    # (note: all classifiers should take note X, feature Y, output list of spans (empty list if no match))
+    # - "scoring system", let every classifier attempt, then take weighted average of confidence, return 1 if above threshold (fraction of classifiers * hyperparameter) (modify via wandb)
+    #   - Naive inital approach: return 1 if *any* classifier predicts 1, 0 otherwise
+
     predictions = []
     classifiers = Classifiers()
     male_classifier, female_classifier = classifiers['male'], classifiers['female']
+    baseline_classifier = classifiers['baseline']
+
     for idx, r in tqdm(test.iterrows(), desc='Eval:', total=len(test)):
         if r['feature_text'] == 'Male':
             prediction = male_classifier.predict(r["pn_history"])
@@ -70,7 +76,9 @@ def make_predictions(test: pd.DataFrame) -> List[str]:
             bounds = f'{0} {len(r["pn_history"])}' if prediction == 1 else ''
             predictions.append(bounds)
         else:
-            predictions.append(f'{np.random.randint(100)} {np.random.randint(101, 200)}')
+            prediction = baseline_classifier.predict(r["case_num"], r["feature_num"], r["pn_history"])
+            predictions.append(prediction)
+            
     return predictions
 
 if __name__ == '__main__':
