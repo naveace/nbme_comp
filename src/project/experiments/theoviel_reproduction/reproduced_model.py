@@ -1,3 +1,4 @@
+import os
 from tqdm import tqdm
 import pandas as pd
 from transformers import BatchEncoding, AutoTokenizer, AutoModel, AutoConfig
@@ -43,7 +44,9 @@ class CFG:
     n_fold=5
     trn_fold=[0, 1, 2, 3, 4]
     train=True
-tokenizer:DebertaTokenizerFast = AutoTokenizer.from_pretrained(CFG.model)
+CACHE_DIR = os.environ.get('TRANSFORMERS_CACHE', './.cache')
+print(f'Using cache dir: {CACHE_DIR}, please set environment variable TRANSFORMERS_CACHE to override')
+tokenizer:DebertaTokenizerFast = AutoTokenizer.from_pretrained(CFG.model, cache_dir=CACHE_DIR)
 tokenizer.save_pretrained('tokenizer/')
 
 def _encode_input(pn_history: str, feature_text: str) -> BatchEncoding:
@@ -120,8 +123,8 @@ class DebertaCustomModel(nn.Module):
     """
     def __init__(self):
         super().__init__()
-        self._config:DebertaConfig = AutoConfig.from_pretrained(CFG.model, output_hidden_states=True)
-        self._model:DebertaModel = AutoModel.from_pretrained(CFG.model, config=self._config)
+        self._config:DebertaConfig = AutoConfig.from_pretrained(CFG.model, output_hidden_states=True, cache_dir=CACHE_DIR)
+        self._model:DebertaModel = AutoModel.from_pretrained(CFG.model, config=self._config, cache_dir=CACHE_DIR)
         self._fc_dropout = nn.Dropout(CFG.fc_dropout)
         self._fc = nn.Linear(self._config.hidden_size, 1)
         self._init_weights(self._fc)
@@ -185,6 +188,7 @@ class DebertaCustomModel(nn.Module):
         with torch.no_grad():
             output = self.forward(inputs).sigmoid().cpu().numpy().reshape(-1) # we have only one piece of text, so should be able to merge into one vector
         return _get_predicted_character_level_bounds(output, text)
+
 
 
 
