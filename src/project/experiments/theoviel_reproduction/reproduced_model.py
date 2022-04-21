@@ -44,7 +44,7 @@ class CFG:
     n_fold=5
     trn_fold=[0, 1, 2, 3, 4]
     train=True
-CACHE_DIR = os.environ.get('TRANSFORMERS_CACHE', './.cache')
+CACHE_DIR = os.environ.get('TRANSFORMERS_CACHE', f'{os.path.expanduser("~")}/.cache')
 print(f'Using cache dir: {CACHE_DIR}, please set environment variable TRANSFORMERS_CACHE to override')
 tokenizer:DebertaTokenizerFast = AutoTokenizer.from_pretrained(CFG.model, cache_dir=CACHE_DIR)
 tokenizer.save_pretrained('tokenizer/')
@@ -121,8 +121,16 @@ class DebertaCustomModel(nn.Module):
     Represents a custom pre-trained DeBerta Model which can featurize BetchEncodings or produce outputs
     Outputs are scalars indicating presence (1) or non-presence (0) of the feature text in the patient note or whether a token is a special token (-1)
     """
-    def __init__(self):
+    def __init__(self, path_to_saved_model=''):
         super().__init__()
+        self._setup_new_model()
+        if path_to_saved_model:
+            self = torch.load(path_to_saved_model, map_location=torch.device('cpu'))
+
+    def _setup_new_model(self):
+        """
+        Sets up a brand new DeBerta model from pretrained using the model stored in CACHE_DIR if it exists
+        """
         self._config:DebertaConfig = AutoConfig.from_pretrained(CFG.model, output_hidden_states=True, cache_dir=CACHE_DIR)
         self._model:DebertaModel = AutoModel.from_pretrained(CFG.model, config=self._config, cache_dir=CACHE_DIR)
         self._fc_dropout = nn.Dropout(CFG.fc_dropout)
