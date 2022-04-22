@@ -6,6 +6,7 @@
 *.npz
 *.npy
 *.zip
+data_dump_dataset/*
 **/tokenizer/*.txt
 **/tokenizer/*.json
 **/tutorial-env/**

@@ -121,11 +121,12 @@ class DebertaCustomModel(nn.Module):
     Represents a custom pre-trained DeBerta Model which can featurize BetchEncodings or produce outputs
     Outputs are scalars indicating presence (1) or non-presence (0) of the feature text in the patient note or whether a token is a special token (-1)
     """
-    def __init__(self, path_to_saved_model=''):
+    def __init__(self, path_to_saved_state_dict=''):
         super().__init__()
         self._setup_new_model()
-        if path_to_saved_model:
-            self = torch.load(path_to_saved_model, map_location=torch.device('cpu'))
+        if path_to_saved_state_dict:
+            print(f'Loading model from {path_to_saved_state_dict}')
+            self.load_state_dict(torch.load(path_to_saved_state_dict, map_location=torch.device('cpu')))
 
     def _setup_new_model(self):
         """
