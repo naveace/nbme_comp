@@ -243,7 +243,6 @@ def train_loop(model: DebertaCustomModel, train_loader: DataLoader, optimizer: t
     scalar = torch.cuda.amp.grad_scaler.GradScaler(enabled=True)
     losses = []
     for step, (inputs, labels) in tqdm(enumerate(train_loader), total=len(train_loader)):
-        assert isinstance(inputs, BatchEncoding) and isinstance(labels, torch.Tensor)
         inputs = {k: v.to(device) for k, v in inputs.items()}
         labels = labels.to(device)
         with torch.cuda.amp.autocast():
