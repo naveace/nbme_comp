@@ -49,20 +49,22 @@ print(f'Using cache dir: {CACHE_DIR}, please set environment variable TRANSFORME
 tokenizer:DebertaTokenizerFast = AutoTokenizer.from_pretrained(CFG.model, cache_dir=CACHE_DIR)
 tokenizer.save_pretrained('tokenizer/')
 
-def _encode_input(pn_history: str, feature_text: str) -> BatchEncoding:
+def _encode_input(pn_history: str, feature_text: str, case_num: int) -> BatchEncoding:
     """
-    Encodes the input text of a patient note as well as the feature text into a Batch Encoding
+    Encodes the input text of a patient note as well as the feature text and case_num into a Batch Encoding
         which will be fed into the DeBerta model.
     Expected output of the model is a sequence of 1s and 0s for the tokens of pn_history
         where 1 indicates that feature `feature_text` is present in the token.
     :param pn_history: The patient note
     :param feature_text: The feature text
+    :param case_num: The case number
     :return: The Batch Encoding of the pair of inputs with the following format:
         .input_ids: torch.tensor (CFG.max_len), sequence of tokens the input is mapped to, given by the id (int)
         .token_type_ids: torch.tensor (CFG.max_len), sequence of ids indicating what sentence a token belongs to (int)
         .attention_mask: torch.tensor (CFG.max_len), sequence of 1s and 0s indicating which tokens should be attended to (int)
     """
-    inputs:BatchEncoding = tokenizer(pn_history, feature_text, add_special_tokens=True, max_length=CFG.max_len, padding='max_length', return_offsets_mapping=False)
+    context = f'Feature: {feature_text} Case: {case_num}'
+    inputs:BatchEncoding = tokenizer(pn_history, context, add_special_tokens=True, max_length=CFG.max_len, padding='max_length', return_offsets_mapping=False)
     for key, value in inputs.items():
         inputs[key] = torch.tensor(value, dtype=torch.long)
     return inputs
@@ -112,7 +114,7 @@ class TrainDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Tuple[BatchEncoding, torch.Tensor]:
         row:pd.Series = self._TRAIN.iloc[idx]
-        inputs = _encode_input(row['pn_history'], row['feature_text'])
+        inputs = _encode_input(row['pn_history'], row['feature_text'], row['case_num'])
         label = _create_label(row['pn_history'], row['location'])
         return inputs, label
 
@@ -182,7 +184,7 @@ class DebertaCustomModel(nn.Module):
         """
         return self._fc.parameters()
     
-    def inference(self, text: str, feature: str) -> List[Tuple[int, int]]:
+    def inference(self, text: str, feature: str, case_num: int) -> List[Tuple[int, int]]:
         """
         Performs inference on a patient note `text` and a feature `feature`
         :param text: The patient note
@@ -193,7 +195,7 @@ class DebertaCustomModel(nn.Module):
         device = torch.device('cuda')
         self.to(device)
         self.eval()
-        inputs = {k: v.to(device).view(1,-1) for k, v in _encode_input(text, feature).items()}
+        inputs = {k: v.to(device).view(1,-1) for k, v in _encode_input(text, feature, case_num).items()}
         with torch.no_grad():
             output = self.forward(inputs).sigmoid().cpu().numpy().reshape(-1) # we have only one piece of text, so should be able to merge into one vector
         return _get_predicted_character_level_bounds(output, text)
@@ -241,7 +243,7 @@ def train_loop(model: DebertaCustomModel, train_loader: DataLoader, optimizer: t
     scalar = torch.cuda.amp.grad_scaler.GradScaler(enabled=True)
     losses = []
     for step, (inputs, labels) in tqdm(enumerate(train_loader), total=len(train_loader)):
-        assert isinstance(inputs, dict) and isinstance(labels, torch.Tensor)
+        assert isinstance(inputs, BatchEncoding) and isinstance(labels, torch.Tensor)
         inputs = {k: v.to(device) for k, v in inputs.items()}
         labels = labels.to(device)
         with torch.cuda.amp.autocast():
