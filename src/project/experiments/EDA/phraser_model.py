@@ -94,6 +94,7 @@ def prepare_test_data() -> pd.DataFrame:
     return test
 
 
+
 test = prepare_test_data()
 features = get_features()
 embeddings, model = train_bert(features['feature_text'])
