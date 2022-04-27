@@ -69,7 +69,6 @@ def predict(feature_num: int, case_num:int, pn_note: str, threshold=0.47) -> lis
     features = get_features(case_num)
     embeddings, model = train_bert(features['feature_text'])
     phrases = phrase(pn_note)
-    features = get_features()
     start = 0
     locations = []
     similarities = []
