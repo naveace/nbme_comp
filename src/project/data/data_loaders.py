@@ -87,3 +87,25 @@ def assert_correctness(labels) -> None:
                 assert(isinstance(obj[1], int))
         except AssertionError:
             print(f'Failed assertion for element {idx}: {element}')
+
+def get_synonym_training_data() -> pd.DataFrame:
+    """
+    Unique from get_clean_train_data() in the following way:
+    - Contains 6 copies of a row, 1 original and 5 with  with one word in pn_history replaced with a synonym
+    _________________________________________________________________________
+    Produces a cleaned version of the train dataframe with the following:
+    id: a unique id for the train instance (as in Kaggle)
+    case_num: unique id for case (as in Kaggle)
+    pn_num: unique id for patient note (as in Kaggle)
+    feature_num: unique id for patient note (as in kaggle)
+    annotation: a List[str] of the text in patient note pn_num that corresponds to feature pn_num. 
+        Each element is not necessarily contiguous but is human-readable. Some elements may splice together parts of patient note
+    location_raw: the raw location (as in Kaggle)
+    feature_text: the feature text for the feature feature_num (as in Kaggle)
+    pn_history: the patient note (as in Kaggle)
+    location: a List[Tuple[start: int, end: int]] of the ranges of characters in the patient note that corresponds to the feature (positives)
+    """
+    df =  pd.read_csv(f'{CWD}/train_data_with_synonyms.csv', index_col=0)
+    df['annotation'] = df['annotation'].map(eval)
+    df['location'] = df['location'].map(eval)
+    return df
