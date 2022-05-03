@@ -2,7 +2,7 @@ import ast
 import numpy as np
 import pandas as pd
 from collections import Counter
-
+from sklearn.metrics import f1_score
 from typing import List, Union, Tuple
 
 from project.data.data_loaders import get_clean_train_data
@@ -96,11 +96,11 @@ class BaselineClassifier:
         return loc
 
 
-    def predict(self, case_num: int, feature_num: int, patient_note: str) -> str: # TODO: modify entire submission script to match this
+    def predict(self, case_num: int, feature_num: int, patient_note: str) -> List[Tuple[int, int]]: # TODO: modify entire submission script to match this
         """
         Returns string of bounds if case number case_num and note patient_note has feature_num, returns '' otherwise.
         """
-        candidates = self.matching_dict[(case_num, feature_num)]
+        candidates = self.matching_dict.get((case_num, feature_num), [])
 
         spans = []
         for c in candidates:
@@ -109,9 +109,7 @@ class BaselineClassifier:
                 spans.append((start, start + len(c)))
     
         # list of predicted spans in their respective location of patient_note
-        locations = self.pred_to_location(spans)
-        return locations
-
+        return spans
 
 
 if __name__ == "__main__":

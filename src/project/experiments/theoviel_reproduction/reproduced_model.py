@@ -191,8 +191,7 @@ class DebertaCustomModel(nn.Module):
         :param feature: The feature text
         :return: The location pairs of the feature text in the patient note
         """
-        assert torch.cuda.is_available(), 'Deberta model requires GPU'
-        device = torch.device('cuda')
+        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         self.to(device)
         self.eval()
         inputs = {k: v.to(device).view(1,-1) for k, v in _encode_input(text, feature, case_num).items()}

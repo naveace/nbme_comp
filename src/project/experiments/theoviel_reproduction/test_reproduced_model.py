@@ -3,34 +3,26 @@ import numpy as np
 from project.data.data_loaders import get_clean_train_data
 from typing import Final
 from torch.utils.data import DataLoader
-TRAIN:Final = get_clean_train_data()
 
-def test_empty_input():
-    encoding = _encode_input("", "")
-    input_ids:np.ndarray = encoding.input_ids.numpy()
-    token_type_ids:np.ndarray = encoding.token_type_ids.numpy()
-    attention_mask:np.ndarray = encoding.attention_mask.numpy()
-    assert np.all(input_ids[0:2] == [1,2])
-    assert np.all(input_ids[2:] == 0)
-    assert np.all(token_type_ids == 0)
-    assert np.all(attention_mask[0:2] == [1,1])
-    assert np.all(attention_mask[2:] == 0)
 
 def test_patient_note_and_feature():
+    TRAIN:Final = get_clean_train_data()
     HISTORY = TRAIN.pn_history.values[0]
     FEATURE = TRAIN.feature_text.values[0]
-    encoding = _encode_input(HISTORY, FEATURE)
+    CASE = TRAIN.case_num.values[0]
+    encoding = _encode_input(HISTORY, FEATURE, CASE)
     input_ids:np.ndarray = encoding.input_ids.numpy()
     token_type_ids:np.ndarray = encoding.token_type_ids.numpy()
     attention_mask:np.ndarray = encoding.attention_mask.numpy()
-    assert len(np.nonzero(input_ids)[0]) == 270
+    assert len(np.nonzero(input_ids)[0]) == 275
     assert input_ids.max() == 50121
     assert input_ids[input_ids.nonzero()[0]].min() == 1
     assert np.all(token_type_ids == 0)
     assert np.all(attention_mask[0:2] == [1,1])
-    assert len(np.nonzero(attention_mask)[0]) == 270
+    assert len(np.nonzero(attention_mask)[0]) == 275
 
 def test_create_label_single_loc():
+    TRAIN:Final = get_clean_train_data()
     label:np.ndarray = _create_label(TRAIN.loc[20, 'pn_history'], TRAIN.loc[20, 'location']).numpy()
     assert label.shape == (466,)
     assert label[0] == -1
@@ -38,12 +30,14 @@ def test_create_label_single_loc():
 
 
 def test_create_label_multi_loc():
+    TRAIN:Final = get_clean_train_data()
     label:np.ndarray = _create_label(TRAIN.loc[3, 'pn_history'], TRAIN.loc[3, 'location']).numpy()
     assert label.shape == (466,)
     assert label[0] == -1
     assert np.all(np.where(label == 1)[0] == [20, 21, 43])
 
 def test_train_dataset():
+    TRAIN:Final = get_clean_train_data()
     data = TrainDataset(TRAIN)
     assert len(data) == len(TRAIN)
     (test_X, test_y) = data[42]
@@ -70,3 +64,9 @@ def test_model():
         kaggle_key = '.'.join(['model' if not k.startswith('_fc') else 'fc'] + k.split('.')[1:])  # whatever we call our model internally should not matter, called model on kaggle
         assert np.isclose(v, kaggle_param_means[kaggle_key]), f'{kaggle_key} differs. Ours: {v:.5f}, theirs: {kaggle_param_means[kaggle_key]:.5f}'
     assert model.encoder_model()
+
+def test_inference_not_throw_error():
+    TRAIN:Final = get_clean_train_data()
+    model = DebertaCustomModel().train()
+    datapoint = TRAIN.iloc[0]
+    model.inference(datapoint['pn_history'], datapoint['feature_text'], datapoint['case_num'])
