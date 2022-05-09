@@ -6,10 +6,7 @@ nltk.download('punkt')
 from nltk.tokenize import sent_tokenize
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
-import sys
-sys.path.insert(0, '../../data')
-import data_loaders
-# from project.data.data_loaders import get_clean_train_data, get_features
+from project.data.data_loaders import get_clean_train_data, get_features
 
 
 def phrase(text: str) -> list:
@@ -94,10 +91,3 @@ def prepare_test_data() -> pd.DataFrame:
     test['pn_history'] = test['pn_num'].apply(lambda x: notes.iloc[x]['pn_history'])
 
     return test
-
-
-test = prepare_test_data()
-test['pred'] = test.apply(lambda row: predict(row['feature_num'],
-                                              row['case_num'],
-                                              row['pn_history'],
-                                              threshold=0.37), axis=1)
